@@ -6,11 +6,6 @@ module Rack
       @app = app
       @printer = options[:printer] || ::RubyProf::GraphHtmlPrinter
       @exclusions = options[:exclude]
-
-      @path = options[:path]
-      @path ||= Rails.root + 'tmp/performance' if defined?(Rails)
-      @path ||= ::File.join((ENV["TMPDIR"] || "/tmp"), 'performance')
-      @path = Pathname(@path)
     end
 
     def call(env)
@@ -25,10 +20,11 @@ module Rack
 
       if mode
         result = ::RubyProf.stop
-        write_result(result, request)
-      end
+        [200, {}, write_result(result)]
 
-      [status, headers, body]
+      else
+        [status, headers, body]
+      end
     end
 
     def profile_mode(request)
@@ -72,15 +68,12 @@ module Rack
       end
     end
 
-    def write_result(result, request)
+    def write_result(result)
       result.eliminate_methods!(@exclusions) if @exclusions
       printer = @printer.new(result)
-      Dir.mkdir(@path) unless ::File.exists?(@path)
-      url = request.fullpath.gsub(/[?\/]/, '-')
-      filename = "#{prefix(printer)}#{Time.now.strftime('%Y-%m-%d-%H-%M-%S')}-#{url.slice(0, 50)}.#{format(printer)}"
-      ::File.open(@path + filename, 'w+') do |f|
-        printer.print(f)
-      end
+      out = StringIO.new
+      printer.print(out)
+      out
     end
   end
 end
